@@ -1,7 +1,6 @@
-const axios = require('axios');
-const querystring = require('querystring');
-const fs = require('fs');
-
+const axios = require("axios");
+const querystring = require("querystring");
+const fs = require("fs");
 
 /**
  * @version 0.2
@@ -9,7 +8,6 @@ const fs = require('fs');
  * @licence MIT
  */
 class IServTool {
-
     /**
      * Create a IServTool instance
      * @constructor
@@ -38,7 +36,7 @@ class IServTool {
                 return status >= 200 && status < 303;
             },
             headers: {
-                'Cookie': cookies || ''
+                Cookie: cookies || "",
             },
         });
     }
@@ -48,33 +46,56 @@ class IServTool {
      * @returns {Promise<void>}
      */
     async login() {
-        if (this.reuseCookies && await this.isCookieValid()) {
-            this._log('[LOGIN] Skipping Login since Cookies already valid!');
+        if (this.reuseCookies && (await this.isCookieValid())) {
+            this._log("[LOGIN] Skipping Login since Cookies already valid!");
             return;
         }
-        this._log('[LOGIN] Logging in...');
+        this._log("[LOGIN] Logging in...");
         const form = querystring.stringify({
-            '_username': this._username,
-            '_password': this._password
+            _username: this._username,
+            _password: this._password,
+            _remember_me: "on",
         });
-        this._log('[LOGIN] Built q-string');
+        this._log("[LOGIN] Built q-string");
         const data = await this._axios({
             data: form,
-            method: 'POST',
-            url: '/iserv/login_check',
+            method: "POST",
+            url: "/iserv/login_check",
+        });
+        let cookies = data.headers["set-cookie"];
+        let cookieStr = "";
+        let cookieArr;
+        let already = [0, 0, 0];
+        cookies.forEach((cookieString) => {
+            cookieArr = cookieString.replace(" ", "").split(";");
+            //console.log(cookieArr);
+            cookieArr.forEach((c) => {
+                if (c.includes("PHPSESSID") && !already[0]) {
+                    cookieStr = cookieStr + c + ";";
+                    already[0] = 1;
+                }
+                if (c.includes("PHPSESSPW") && !already[1]) {
+                    cookieStr = cookieStr + c + ";";
+                    already[1] = 1;
+                }
+                if (c.includes("REMEMBERME") && !already[2]) {
+                    cookieStr = cookieStr + c;
+                    already[2] = 1;
+                }
+            });
         });
         this._axios = await axios.create({
             baseURL: `https://${this._host}`,
             headers: {
-                'Cookie': (data.headers["set-cookie"]) || '',
+                Cookie: cookieStr,
             },
             maxRedirects: 0,
             validateStatus: function (status) {
                 return status >= 200 && status < 303;
-            }
+            },
         });
-        await this._saveCookies((data.headers["set-cookie"]));
-        this._log('[LOGIN] Logged In')
+        await this._saveCookies(cookieStr);
+        this._log("[LOGIN] Logged In");
     }
 
     /**
@@ -83,15 +104,15 @@ class IServTool {
      * @returns {Promise<Object>}
      */
     async getNotifications(since) {
-        if(!since) throw new Error('No since given')
-        this._log('[GETNOTI] Getting Notifications since ' + since);
+        if (!since) throw new Error("No since given");
+        this._log("[GETNOTI] Getting Notifications since " + since);
         // Time Format looks like this
         // 2018-12-29T23:21:00+01:00
         const resp = await this._axios({
-            url: '/iserv/user/api/notifications?since=' + encodeURIComponent(since)
+            url: "/iserv/user/api/notifications?since=" + encodeURIComponent(since),
         });
-        this._log('[GETNOTI] Got notificications');
-        return resp.data
+        this._log("[GETNOTI] Got notificications");
+        return resp.data;
     }
 
     /**
@@ -100,7 +121,7 @@ class IServTool {
      */
     async getMailFolders() {
         const resp = await this._axios({
-            url: 'iserv/mail/api/folder/list'
+            url: "iserv/mail/api/folder/list",
         });
         return resp.data;
     }
@@ -111,7 +132,7 @@ class IServTool {
      */
     async getUnreadMails() {
         const resp = await this._axios({
-            url: 'iserv/mail/api/unread/inbox'
+            url: "iserv/mail/api/unread/inbox",
         });
         return resp.data;
     }
@@ -125,21 +146,27 @@ class IServTool {
      * @param {string} [dir="desc"] - Sorting direction (desc/asc)
      * @returns {Promise<Object>}
      */
-    async getMessagesForInbox(path = 'INBOX', length = 50, start = 0, column = 'date', dir = 'desc') {
+    async getMessagesForInbox(
+        path = "INBOX",
+        length = 50,
+        start = 0,
+        column = "date",
+        dir = "desc"
+    ) {
         const resp = await this._axios({
             url: `iserv/mail/api/message/list`,
             headers: {
-                'Content-Type': 'application/x-www-form-urlencoded'
+                "Content-Type": "application/x-www-form-urlencoded",
             },
             params: {
                 path: path,
                 length: length,
                 start: start,
-                'order[column]': column,
-                'order[dir]': dir
-            }
+                "order[column]": column,
+                "order[dir]": dir,
+            },
         });
-        return resp.data
+        return resp.data;
     }
 
     /**
@@ -151,14 +178,14 @@ class IServTool {
     async getUpcomingEvents(includeSubscriptions = false, limit = 14) {
         const url = "iserv/calendar/api/upcoming";
         const resp = await this._axios({
-            url: 'iserv/calendar/api/upcoming',
+            url: "iserv/calendar/api/upcoming",
             headers: {
-                'Content-Type': 'application/x-www-form-urlencoded'
+                "Content-Type": "application/x-www-form-urlencoded",
             },
             params: {
                 includeSubscriptions: includeSubscriptions,
-                limit: limit
-            }
+                limit: limit,
+            },
         });
         return resp.data;
     }
@@ -170,11 +197,11 @@ class IServTool {
      * @param {(int|String)} [h=""] - Image height, leave blank for full size
      * @returns {Promise<Object>}
      */
-    async getUserProfilePic(user, w = '', h = '') {
+    async getUserProfilePic(user, w = "", h = "") {
         try {
             const resp = await this._axios({
                 url: `iserv/addressbook/public/image/${user}/photo/${w}/${h}`,
-                responseType: 'arraybuffer'
+                responseType: "arraybuffer",
             });
             return resp.data;
         } catch (e) {
@@ -189,16 +216,16 @@ class IServTool {
      * @returns {Promise<Object>}
      */
     async getMessageByID(id, path = "INBOX") {
-        this._log(`[GMBID] Getting Message #${id} from "${path}"`)
-        if (!path) throw new Error('No message ID given');
+        this._log(`[GMBID] Getting Message #${id} from "${path}"`);
+        if (!path) throw new Error("No message ID given");
         const resp = await this._axios({
-            url: '/iserv/mail/api/message',
+            url: "/iserv/mail/api/message",
             params: {
                 path: path,
-                msg: id
-            }
+                msg: id,
+            },
         });
-        return resp.data
+        return resp.data;
     }
 
     /**
@@ -207,14 +234,14 @@ class IServTool {
      * @returns {Promise<Object>}
      */
     async userLookup(query) {
-        if (!query) throw new Error('No query given to user lookup');
+        if (!query) throw new Error("No query given to user lookup");
         const resp = await this._axios({
-            url: 'iserv/addressbook/lookup',
+            url: "iserv/addressbook/lookup",
             params: {
-                query: query
-            }
+                query: query,
+            },
         });
-        return resp.data
+        return resp.data;
     }
 
     /**
@@ -222,9 +249,9 @@ class IServTool {
      * @param {String} [subfolder=""] - ID to create tree. Leave blank for root
      * @returns {Promise<Object>}
      */
-    async getFolderTree(subfolder = '') {
+    async getFolderTree(subfolder = "") {
         const resp = await this._axios({
-            url: 'iserv/file.json/' + subfolder
+            url: "iserv/file.json/" + subfolder,
         });
         return resp.data;
     }
@@ -235,9 +262,9 @@ class IServTool {
      */
     async getEventSources() {
         const resp = await this._axios({
-            url: 'iserv/calendar/api/eventsources'
+            url: "iserv/calendar/api/eventsources",
         });
-        return resp.data
+        return resp.data;
     }
 
     /**
@@ -247,30 +274,30 @@ class IServTool {
      * @param {String} end - End date for query
      * @returns {Promise<Object>}
      */
-    async getEventsFromSource(source, start, end){
+    async getEventsFromSource(source, start, end) {
         const resp = await this._axios({
-            url: 'iserv/calendar/api/feed',
+            url: "iserv/calendar/api/feed",
             params: {
                 cal: source,
                 start: start,
-                end: end
-            }
+                end: end,
+            },
         });
         return resp.data;
     }
 
     _getPresavedHeaders() {
-        this._log('[CKS] Trying to load saved cookies');
-        if (this.reuseCookies && fs.existsSync('./headers')) {
-            this._log('[CKS] Found them Cookies');
-            return JSON.parse(fs.readFileSync('./headers').toString())
+        this._log("[CKS] Trying to load saved cookies");
+        if (this.reuseCookies && fs.existsSync("./headers")) {
+            this._log("[CKS] Found them Cookies");
+            return JSON.parse(fs.readFileSync("./headers").toString());
         } else {
-            this._log('[CKS] Havent found any pre-saved headers');
+            this._log("[CKS] Havent found any pre-saved headers");
         }
     }
 
     async _saveCookies(h) {
-        if (this.reuseCookies) fs.writeFileSync('./headers', JSON.stringify(h))
+        if (this.reuseCookies) fs.writeFileSync("./headers", JSON.stringify(h));
     }
 
     /**
@@ -280,16 +307,17 @@ class IServTool {
     async isCookieValid() {
         try {
             await this._axios({
-                url: 'iserv/'
+                url: "iserv/",
             });
-            this._log('[isValid] Cookies are valid.');
+            this._log("[isValid] Cookies are valid.");
             return true;
         } catch (e) {
-            this._log(`[isValid] Cookies NOT valid. Check returned ${e.response.status} (${e.response.statusText})`);
+            this._log(
+                `[isValid] Cookies NOT valid. Check returned ${e.response.status} (${e.response.statusText})`
+            );
             return false;
         }
     }
-
 }
 
 module.exports = IServTool;
